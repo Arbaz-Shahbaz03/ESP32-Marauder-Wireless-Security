@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>ESP32 Marauder Terminal</title>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600&family=Syne:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg:        #0a0c10;
+            --surface:   #111318;
+            --border:    #1e2330;
+            --border-hi: #2d3348;
+            --accent:    #4f8ef7;
+            --accent-dim:#1e3a6e;
+            --success:   #34d399;
+            --warning:   #fbbf24;
+            --error:     #f87171;
+            --text:      #c9d1e0;
+            --text-dim:  #5a6480;
+            --text-hi:   #e8ecf5;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: 'JetBrains Mono', monospace;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 32px 16px;
+        }
+
+        /* ── Header ── */
+        .header {
+            width: 100%;
+            max-width: 860px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 24px;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 18px;
+        }
+
+        .header-left { display: flex; align-items: center; gap: 12px; }
+
+        .logo-icon {
+            width: 36px; height: 36px;
+            background: var(--accent-dim);
+            border: 1px solid var(--accent);
+            border-radius: 8px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 18px;
+        }
+
+        .title {
+            font-family: 'Syne', sans-serif;
+            font-size: 1.15rem;
+            font-weight: 700;
+            color: var(--text-hi);
+            letter-spacing: 0.02em;
+        }
+
+        .subtitle {
+            font-size: 0.7rem;
+            color: var(--text-dim);
+            margin-top: 2px;
+        }
+
+        .status-pill {
+            display: flex; align-items: center; gap: 6px;
+            padding: 5px 12px;
+            border-radius: 20px;
+            border: 1px solid var(--border);
+            background: var(--surface);
+            font-size: 0.72rem;
+            color: var(--text-dim);
+            transition: all 0.3s;
+        }
+
+        .status-pill.connected {
+            border-color: var(--success);
+            color: var(--success);
+        }
+
+        .status-dot {
+            width: 7px; height: 7px;
+            border-radius: 50%;
+            background: var(--text-dim);
+            transition: background 0.3s;
+        }
+
+        .status-pill.connected .status-dot {
+            background: var(--success);
+            box-shadow: 0 0 6px var(--success);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50%       { opacity: 0.4; }
+        }
+
+        /* ── Connect Button ── */
+        .connect-btn {
+            display: flex; align-items: center; gap: 8px;
+            padding: 9px 20px;
+            background: transparent;
+            color: var(--accent);
+            border: 1px solid var(--accent);
+            border-radius: 6px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.78rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            letter-spacing: 0.04em;
+        }
+
+        .connect-btn:hover {
+            background: var(--accent);
+            color: #fff;
+            box-shadow: 0 0 18px rgba(79,142,247,0.25);
+        }
+
+        .connect-btn:disabled {
+            opacity: 0.4;
+            cursor: default;
+        }
+
+        /* ── Terminal Window ── */
+        .terminal-wrap {
+            width: 100%;
+            max-width: 860px;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 8px 40px rgba(0,0,0,0.5);
+        }
+
+        .terminal-titlebar {
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+            padding: 10px 14px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .dot { width: 11px; height: 11px; border-radius: 50%; }
+        .dot.red    { background: #ff5f57; }
+        .dot.yellow { background: #febc2e; }
+        .dot.green  { background: #28c840; }
+
+        .titlebar-label {
+            margin-left: 6px;
+            font-size: 0.72rem;
+            color: var(--text-dim);
+            letter-spacing: 0.06em;
+        }
+
+        #terminal {
+            width: 100%;
+            height: 420px;
+            padding: 16px;
+            overflow-y: auto;
+            background: var(--bg);
+            font-size: 0.82rem;
+            line-height: 1.65;
+            color: var(--text);
+        }
+
+        #terminal::-webkit-scrollbar { width: 6px; }
+        #terminal::-webkit-scrollbar-track { background: transparent; }
+        #terminal::-webkit-scrollbar-thumb {
+            background: var(--border-hi);
+            border-radius: 3px;
+        }
+
+        .line { display: block; margin: 1px 0; white-space: pre-wrap; word-break: break-word; overflow-wrap: break-word; }
+        .line.info    { color: var(--text-dim); }
+        .line.success { color: var(--success); }
+        .line.cmd     { color: var(--accent); }
+        .line.warn    { color: var(--warning); }
+        .line.err     { color: var(--error); }
+
+        /* ── Input Bar ── */
+        .input-bar {
+            background: var(--surface);
+            border-top: 1px solid var(--border);
+            padding: 10px 14px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .prompt {
+            color: var(--accent);
+            font-size: 0.82rem;
+            user-select: none;
+            white-space: nowrap;
+        }
+
+        #commandInput {
+            flex: 1;
+            background: transparent;
+            border: none;
+            outline: none;
+            color: var(--text-hi);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.82rem;
+            caret-color: var(--accent);
+        }
+
+        #commandInput::placeholder { color: var(--text-dim); }
+
+        .send-btn {
+            padding: 6px 14px;
+            background: var(--accent-dim);
+            color: var(--accent);
+            border: 1px solid var(--accent);
+            border-radius: 5px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.74rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+
+        .send-btn:hover {
+            background: var(--accent);
+            color: #fff;
+        }
+
+        /* ── Footer ── */
+        .footer {
+            margin-top: 20px;
+            font-size: 0.68rem;
+            color: var(--text-dim);
+            letter-spacing: 0.04em;
+        }
+    </style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+    <div class="header-left">
+        <div class="logo-icon">⚡</div>
+        <div>
+            <div class="title">ESP32 Marauder</div>
+            <div class="subtitle">Serial Terminal Interface &nbsp;·&nbsp; <span style="color:var(--accent);opacity:0.85;">by Arbaz Shahbaz</span></div>
+        </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px;">
+        <div class="status-pill" id="statusPill">
+            <div class="status-dot" id="statusDot"></div>
+            <span id="statusText">Disconnected</span>
+        </div>
+        <button class="connect-btn" id="connectBtn" onclick="connectSerial()">
+            ⬡ Connect Device
+        </button>
+    </div>
+</div>
+
+<!-- Terminal -->
+<div class="terminal-wrap">
+    <div class="terminal-titlebar">
+        <div class="dot red"></div>
+        <div class="dot yellow"></div>
+        <div class="dot green"></div>
+        <span class="titlebar-label">SERIAL OUTPUT — 115200 BAUD</span>
+    </div>
+    <div id="terminal">
+        <span class="line info">// ESP32 Marauder Terminal ready. Press "Connect Device" to begin.</span>
+        <span class="line info">// Waiting for serial connection...</span>
+    </div>
+    <div class="input-bar">
+        <span class="prompt">marauder&nbsp;›&nbsp;</span>
+        <input type="text" id="commandInput" placeholder="Type a command and press Enter..." autocomplete="off" />
+        <button class="send-btn" onclick="sendCommand()">SEND ↵</button>
+    </div>
+</div>
+
+<div class="footer">Web Serial API &nbsp;·&nbsp; 115200 Baud</div>
+
+<script>
+let port, writer, reader;
+
+// ── Enter key support ──
+document.getElementById('commandInput').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') sendCommand();
+});
+
+async function connectSerial() {
+    const btn = document.getElementById('connectBtn');
+    try {
+        port = await navigator.serial.requestPort();
+        await port.open({ baudRate: 115200 });
+
+        writer = port.writable.getWriter();
+        reader = port.readable.getReader();
+
+        // Update UI
+        btn.textContent = '✓ Connected';
+        btn.disabled = true;
+        document.getElementById('statusPill').classList.add('connected');
+        document.getElementById('statusText').textContent = 'Connected';
+
+        readSerial();
+        logToTerminal('✅ Connected to ESP32 via Web Serial API', 'success');
+        document.getElementById('commandInput').focus();
+    } catch (err) {
+        logToTerminal('✗ Connection failed: ' + err.message, 'err');
+    }
+}
+
+async function readSerial() {
+    while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        const text = new TextDecoder().decode(value);
+        logToTerminal(text);
+    }
+}
+
+async function sendCommand() {
+    const input = document.getElementById('commandInput');
+    const cmd = input.value.trim();
+    if (!cmd) return;
+
+    if (!writer) {
+        logToTerminal('⚠ Not connected. Please connect a device first.', 'warn');
+        return;
+    }
+
+    await writer.write(new TextEncoder().encode(cmd + '\n'));
+    logToTerminal('› ' + cmd, 'cmd');
+    input.value = '';
+}
+
+function logToTerminal(text, type = '') {
+    const terminal = document.getElementById('terminal');
+    const span = document.createElement('span');
+    span.className = 'line ' + type;
+    span.textContent = text;
+    terminal.appendChild(span);
+    terminal.scrollTop = terminal.scrollHeight;
+}
+</script>
+</body>
+</html>
